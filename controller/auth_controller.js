@@ -4,7 +4,7 @@ import {
   verifyLoginCode,
   getMyProfile,
   signOut,
-} from "../service/auth_service.js";
+} from "./service/auth_service.js";
 
 // register
 export async function registerUser(req, res) {
@@ -51,21 +51,13 @@ export async function verifyLogin(req, res) {
     if (!result.ok) return res.status(401).json(result);
 
     // MFA success → user officially logged in
-    req.session.user = {
-      id: pending.id,
-      user_id: pending.id,
-      role_id: pending.role_id,
-      role_name: pending.role_name,
-      role: pending.role_name,
-    };
+    req.session.user = { id: pending.id, role_id: pending.role_id };
     req.session.mfaVerified = true;
     delete req.session.mfaPendingUser;
 
     return res.json({ ok: true, logged_in: true });
   } catch (e) {
-    return res
-      .status(400)
-      .json({ ok: false, message: e?.message || "MFA verification failed" });
+    return res.status(400).json({ ok: false, message: e?.message || "MFA verification failed" });
   }
 }
 

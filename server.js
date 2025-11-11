@@ -9,7 +9,7 @@ import sensorsRoutes from "./routes/sensors_routes.js";
 import aiRoutes from "./routes/ai_routes.js";
 import adminRoutes from "./routes/admin_routes.js";
 import userRoutes from "./routes/user_routes.js";
-import { attachRole } from "./modules/rbac_module.js";
+import { attachRole, ROLES } from "./modules/rbac_module.js";
 
 const app = express();
 
@@ -33,9 +33,28 @@ app.use(
 );
 
 // Attach session user (if any) to req.user so RBAC can read it.
+const ROLE_ID_TO_NAME = {
+  1: ROLES.ADMIN,
+  2: ROLES.RESEARCHER,
+  3: ROLES.PUBLIC,
+};
+
 app.use((req, _res, next) => {
   if (req.session?.user) {
+    const roleId = req.session.user.role_id;
+    const roleName = roleId ? ROLE_ID_TO_NAME[Number(roleId)] : null;
+
+    if (roleName && !req.session.user.role) {
+      req.session.user.role = roleName;
+      req.session.user.role_name = roleName;
+    }
+
     req.user = { ...(req.user || {}), ...req.session.user };
+
+    if (roleName) {
+      req.user.role = roleName;
+      req.user.role_name = roleName;
+    }
   }
   next();
 });
