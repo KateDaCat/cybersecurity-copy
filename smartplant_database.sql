@@ -2,8 +2,11 @@ SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+00:00";
 
+-- ==================== SPRINT 1 IMPLEMENTATION ====================
+
 -- Create database
-CREATE DATABASE IF NOT EXISTS `sarawak_plant_db` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+DROP DATABASE IF EXISTS sarawak_plant_db;
+CREATE DATABASE `sarawak_plant_db` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 USE `sarawak_plant_db`;
 
 -- 1. Roles Table 
@@ -33,12 +36,14 @@ CREATE TABLE `users` (
   `role_id` int(11) DEFAULT NULL,
   `username` varchar(100) NOT NULL,
   `email` varchar(255) NOT NULL,
+  `phone` VARCHAR(20) DEFAULT NULL,
   `password_hash` varchar(255) NOT NULL,
   `avatar_url` varchar(500) DEFAULT NULL,
   `created_at` datetime DEFAULT current_timestamp(),
   PRIMARY KEY (`user_id`),
   UNIQUE KEY `username` (`username`),
   UNIQUE KEY `email` (`email`),
+  UNIQUE KEY `phone` (`phone`),
   KEY `role_id` (`role_id`),
   CONSTRAINT `users_ibfk_1` FOREIGN KEY (`role_id`) REFERENCES `roles` (`role_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -144,12 +149,14 @@ INSERT INTO `species` (`scientific_name`, `common_name`, `is_endangered`, `descr
 ('Test Plant 3', 'Demo Flower', 1, 'Third test species');
 
 -- 3. Insert Users 
-INSERT INTO `users` (`role_id`, `username`, `email`, `password_hash`) VALUES 
-(1, 'testuser', 'test@example.com', 'temp_password');
+INSERT INTO `users` (`role_id`, `username`, `email`, `phone`, `password_hash`) VALUES 
+(1, 'testuser', 'test@example.com', '0167854321', 'temp_password');
 
 -- 4. Insert Sensor_Devices 
 INSERT INTO `sensor_devices` (`node_id`, `device_name`, `species_id`, `location_latitude`, `location_longitude`, `is_active`) VALUES 
 ('TEST_NODE_001', 'Test Sensor Device', 1, 1.50000000, 110.30000000, 1);
 
 COMMIT;
+
+
 

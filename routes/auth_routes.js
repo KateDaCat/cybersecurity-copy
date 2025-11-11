@@ -6,7 +6,7 @@ import {
   verifyLogin,
   getProfile,
   logoutUser,
-} from "./auth_controller.js";
+} from "../controller/auth_controller.js";
 import { requireMfa } from "./mfa_module.js";
 
 function requireLogin(req, res, next) {
