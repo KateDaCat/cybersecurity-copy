@@ -1,4 +1,4 @@
-import db from "./config/db.js";
+import db from "../config/db.js";
 import {
   makeLookupKey,     // HMAC index for fast search (email)
   encryptText,       // AES-GCM encrypt
@@ -7,8 +7,8 @@ import {
   loadBundle,        // JSON -> object
   hashPassword,      // bcrypt hash
   checkPassword,     // bcrypt compare
-} from "./modules/encryption_module.js";
-import { startMfa, verifyMfa } from "./modules/mfa_module.js";
+} from "../modules/encryption_module.js";
+import { startMfa, verifyMfa } from "../modules/mfa_module.js";
 
 // Create Account
 export async function createAccount({ email, username, password, role_id }) {
@@ -47,9 +47,10 @@ export async function startLogin({ email, password }) {
 
   const idx = makeLookupKey(email);
   const [rows] = await db.execute(
-    `SELECT user_id, role_id, email_bundle_json, password_hash
-       FROM users
-      WHERE email_index = ?
+    `SELECT u.user_id, u.role_id, r.role_name, u.email_bundle_json, u.password_hash
+       FROM users u
+       LEFT JOIN roles r ON r.role_id = u.role_id
+      WHERE u.email_index = ?
       LIMIT 1`,
     [idx]
   );
@@ -71,7 +72,11 @@ export async function startLogin({ email, password }) {
     ok: true,
     require_mfa: true,
     sent_to: sent.to,  // masked email for UI
-    user: { id: user.user_id, role_id: user.role_id }, // for session.mfaPendingUser
+    user: {
+      id: user.user_id,
+      role_id: user.role_id,
+      role_name: user.role_name,
+    }, // for session.mfaPendingUser
   };
 }
 
@@ -86,9 +91,10 @@ export async function verifyLoginCode({ user_id, code }) {
 // Get Profile
 export async function getMyProfile(user_id) {
   const [rows] = await db.execute(
-    `SELECT user_id, role_id, email_bundle_json, username_bundle_json
-       FROM users
-      WHERE user_id = ?
+    `SELECT u.user_id, u.role_id, r.role_name, u.email_bundle_json, u.username_bundle_json
+       FROM users u
+       LEFT JOIN roles r ON r.role_id = u.role_id
+      WHERE u.user_id = ?
       LIMIT 1`,
     [user_id]
   );
@@ -98,7 +104,7 @@ export async function getMyProfile(user_id) {
   const email = u.email_bundle_json ? decryptText(loadBundle(u.email_bundle_json)) : null;
   const username = u.username_bundle_json ? decryptText(loadBundle(u.username_bundle_json)) : null;
 
-  return { id: u.user_id, role_id: u.role_id, email, username };
+  return { id: u.user_id, role_id: u.role_id, role_name: u.role_name, email, username };
 }
 
 // SignOut

@@ -1,4 +1,4 @@
-import * as adminService from "../services/admin_service.js";
+import * as adminService from "../service/admin_service.js";
 
 export async function getAllUsers(req, res) {
   try {
