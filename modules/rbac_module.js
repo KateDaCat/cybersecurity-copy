@@ -1,12 +1,12 @@
 export const ROLES = {
   ADMIN: "admin",
   RESEARCHER: "researcher",
-  PUBLIC: "public",
+  PUBLIC: "public",          // same as "user"
 };
 
-// Permissions (string constants for clarity)
+// ---- Permissions -------------------------------------------
 export const PERMISSIONS = {
-  // table views
+  // Table views
   VIEW_ROLES: "tables:roles:view",
   VIEW_USERS: "tables:users:view",
   VIEW_SPECIES_FULL: "tables:species:view_full",
@@ -17,56 +17,64 @@ export const PERMISSIONS = {
   VIEW_PLANT_OBSERVATIONS_PUBLIC: "tables:plant_observations:view_public",
   VIEW_AI_RESULTS: "tables:ai_results:view",
   VIEW_ALERTS: "tables:alerts:view",
-  // admin actions
+
+  // Admin actions
   ASSIGN_ROLES: "roles:assign",
+  ACCOUNT_ACTIVATION: "account:activation", 
 };
 
-// Final policy (each permission defined once)
+// ---- Policy (role → permission) -----------------------------
 const POLICY = {
-  // Admin: everything, Researcher: Plant Data
+  // Admin-only
   [PERMISSIONS.VIEW_ROLES]: [ROLES.ADMIN],
   [PERMISSIONS.VIEW_USERS]: [ROLES.ADMIN],
+  [PERMISSIONS.ASSIGN_ROLES]: [ROLES.ADMIN],
+  [PERMISSIONS.ACCOUNT_ACTIVATION]: [ROLES.ADMIN],
+
+  // Admin + Researcher
   [PERMISSIONS.VIEW_SPECIES_FULL]: [ROLES.ADMIN, ROLES.RESEARCHER],
   [PERMISSIONS.VIEW_SENSOR_DEVICES]: [ROLES.ADMIN, ROLES.RESEARCHER],
   [PERMISSIONS.VIEW_SENSOR_READINGS]: [ROLES.ADMIN, ROLES.RESEARCHER],
   [PERMISSIONS.VIEW_PLANT_OBSERVATIONS_FULL]: [ROLES.ADMIN, ROLES.RESEARCHER],
   [PERMISSIONS.VIEW_AI_RESULTS]: [ROLES.ADMIN, ROLES.RESEARCHER],
   [PERMISSIONS.VIEW_ALERTS]: [ROLES.ADMIN, ROLES.RESEARCHER],
-  [PERMISSIONS.ASSIGN_ROLES]: [ROLES.ADMIN],
 
-  // Public (everyone): only public/non-sensitive views
-  [PERMISSIONS.VIEW_SPECIES_PUBLIC]: [ROLES.ADMIN, ROLES.RESEARCHER, ROLES.PUBLIC],
-  [PERMISSIONS.VIEW_PLANT_OBSERVATIONS_PUBLIC]: [ROLES.ADMIN, ROLES.RESEARCHER, ROLES.PUBLIC],
+  // Public (non-sensitive)
+  [PERMISSIONS.VIEW_SPECIES_PUBLIC]: [
+    ROLES.ADMIN, ROLES.RESEARCHER, ROLES.PUBLIC
+  ],
+  [PERMISSIONS.VIEW_PLANT_OBSERVATIONS_PUBLIC]: [
+    ROLES.ADMIN, ROLES.RESEARCHER, ROLES.PUBLIC
+  ],
 };
 
-// Normalize external text to a canonical role
+// ---- Helpers -----------------------------------------------
 function normalizeRole(value) {
   if (!value) return ROLES.PUBLIC;
   const r = String(value).toLowerCase().trim();
-  if (r === "user") return ROLES.PUBLIC; // alias
+  if (r === "user") return ROLES.PUBLIC;
   if (r === ROLES.ADMIN) return ROLES.ADMIN;
   if (r === ROLES.RESEARCHER) return ROLES.RESEARCHER;
   if (r === ROLES.PUBLIC) return ROLES.PUBLIC;
   return ROLES.PUBLIC;
 }
 
-// Attach role to req. Prefer req.user.role set by auth middleware.
+// Attach role to the request (prefer auth-populated role)
 export function attachRole(req, _res, next) {
-  const fromAuth = req.user?.role || req.user?.role_name; // preferred
+  const fromAuth   = req.user?.role || req.user?.role_name;
   const fromHeader = req.headers["x-user-role"];
-  const fromQuery = req.query?.role;
-  const fromBody = req.body?.role;
+  const fromQuery  = req.query?.role;
+  const fromBody   = req.body?.role;
   req.role = normalizeRole(fromAuth || fromHeader || fromQuery || fromBody);
   next();
 }
 
-// Boolean check
+// Basic permission checks
 export function hasPermission(role, permission) {
   const allowed = POLICY[permission] || [];
   return allowed.includes(role);
 }
 
-// Require a specific permission
 export function requirePermission(permission) {
   return (req, res, next) => {
     if (!hasPermission(req.role, permission)) {
@@ -76,7 +84,7 @@ export function requirePermission(permission) {
   };
 }
 
-// Table view helper: scope = "public" | "full"
+// Table-view convenience middleware
 export function requireTableView(tableName, scope = "public") {
   const t = String(tableName).toLowerCase().trim();
   const s = String(scope).toLowerCase().trim();
@@ -96,17 +104,26 @@ export function requireTableView(tableName, scope = "public") {
   return requirePermission(perm);
 }
 
-// Only admins can assign/change roles
-export function requireRoleAssignment(req, res, next) {
-  if (!hasPermission(req.role, PERMISSIONS.ASSIGN_ROLES)) {
-    return res.status(403).json({ message: "Only admin can assign or change roles." });
+export function requireActiveAccount(req, res, next) {
+  // expect auth middleware to have set req.user with is_active
+  const isActive = (req.user?.is_active ?? true) === true || (req.user?.is_active === 1);
+  if (!isActive) {
+    return res.status(403).json({
+      message: "Access denied: your account is deactivated.",
+    });
   }
   next();
 }
 
-// Convenience guards for decrypting endpoints
-export function requireDecryptRole(req, res, next) {
-  // Only admin and researcher can view decrypted payloads
-  if ([ROLES.ADMIN, ROLES.RESEARCHER].includes(req.role)) return next();
-  return res.status(403).json({ message: "Forbidden: no decrypt permission" });
+// Admin-only: must be active AND must be admin
+export function requireAdminActive(req, res, next) {
+  const isActive = (req.user?.is_active ?? true) === true || (req.user?.is_active === 1);
+  const isAdmin = req.role === ROLES.ADMIN;
+  if (!isActive) {
+    return res.status(403).json({ message: "Access denied: admin account is deactivated." });
+  }
+  if (!isAdmin) {
+    return res.status(403).json({ message: "Forbidden: admin role required." });
+  }
+  next();
 }
