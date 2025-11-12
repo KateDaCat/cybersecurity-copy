@@ -2,6 +2,7 @@ import {
   listPublicSpecies,
   getPublicSpeciesById,
   listPublicObservations,
+  getPublicObservationById,
 } from "../service/user_service.js";
 
 export async function getPublicSpeciesList(_req, res) {
@@ -46,3 +47,20 @@ export async function getPublicObservations(_req, res) {
   }
 }
 
+export async function getPublicObservation(req, res) {
+  try {
+    const { id } = req.params;
+    const observation = await getPublicObservationById(id);
+    if (!observation) {
+      return res
+        .status(404)
+        .json({ ok: false, message: "Observation not found or not public" });
+    }
+    return res.json({ ok: true, observation });
+  } catch (err) {
+    console.error("[user_controller] get public observation failed:", err);
+    return res
+      .status(500)
+      .json({ ok: false, message: "Failed to load observation" });
+  }
+}
