@@ -51,7 +51,7 @@ export async function startLogin({ email, password }) {
        FROM users
       WHERE email_index = ?
       LIMIT 1`,
-    [idx]
+  [idx]
   );
   const user = rows[0];
   if (!user) return { ok: false, message: "Invalid email or password" };
@@ -90,7 +90,7 @@ export async function getMyProfile(user_id) {
        FROM users
       WHERE user_id = ?
       LIMIT 1`,
-    [user_id]
+  [user_id]
   );
   const u = rows[0];
   if (!u) return null;
