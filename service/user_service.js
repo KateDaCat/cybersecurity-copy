@@ -70,25 +70,21 @@ export async function getPublicSpeciesById(speciesId) {
   };
 }
 
-const PUBLIC_OBSERVATION_COLUMNS = `
-  po.observation_id,
-  po.species_id,
-  s.scientific_name,
-  s.common_name,
-  s.image_url,
-  po.photo_url,
-  po.location_name,
-  po.location_latitude,
-  po.location_longitude,
-  po.notes,
-  po.status,
-  po.created_at
-`;
-
 export async function listPublicObservations() {
   const sql = `
     SELECT
-      ${PUBLIC_OBSERVATION_COLUMNS}
+      po.observation_id,
+      po.species_id,
+      s.scientific_name,
+      s.common_name,
+      s.image_url,
+      po.photo_url,
+      po.location_name,
+      po.location_latitude,
+      po.location_longitude,
+      po.notes,
+      po.status,
+      po.created_at
     FROM plant_observations po
     INNER JOIN species s ON s.species_id = po.species_id
     WHERE COALESCE(s.is_endangered, 0) = 0
@@ -115,43 +111,4 @@ export async function listPublicObservations() {
     status: row.status,
     observed_at: row.created_at,
   }));
-}
-
-export async function getPublicObservationById(observationId) {
-  const id = normalizeId(observationId);
-  if (!id) return null;
-
-  const sql = `
-    SELECT
-      ${PUBLIC_OBSERVATION_COLUMNS}
-    FROM plant_observations po
-    INNER JOIN species s ON s.species_id = po.species_id
-    WHERE po.observation_id = ?
-      AND COALESCE(s.is_endangered, 0) = 0
-      AND po.status = 'verified'
-    LIMIT 1
-  `;
-
-  const [rows] = await db.query(sql, [id]);
-  const row = rows[0];
-  if (!row) return null;
-
-  return {
-    observation_id: row.observation_id,
-    species: {
-      species_id: row.species_id,
-      scientific_name: row.scientific_name,
-      common_name: row.common_name,
-      image_url: row.image_url,
-    },
-    photo_url: row.photo_url,
-    location: {
-      name: row.location_name,
-      latitude: row.location_latitude,
-      longitude: row.location_longitude,
-    },
-    notes: row.notes,
-    status: row.status,
-    observed_at: row.created_at,
-  };
 }

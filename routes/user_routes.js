@@ -3,7 +3,6 @@ import {
   getPublicSpeciesList,
   getPublicSpecies,
   getPublicObservations,
-  getPublicObservation,
 } from "../controller/user_controller.js";
 import { requireTableView } from "../modules/rbac_module.js";
 
@@ -25,12 +24,6 @@ router.get(
   "/observations",
   requireTableView("plant_observations", "public"),
   getPublicObservations
-);
-
-router.get(
-  "/observations/:id",
-  requireTableView("plant_observations", "public"),
-  getPublicObservation
 );
 
 export default router;
