@@ -9,6 +9,7 @@ import sensorsRoutes from "./routes/sensors_routes.js";
 import aiRoutes from "./routes/ai_routes.js";
 import adminRoutes from "./routes/admin_routes.js";
 import userRoutes from "./routes/user_routes.js";
+import plantObservationSubmitRoutes from "./routes/plant_observation_routes.js";
 import { attachRole, ROLES } from "./modules/rbac_module.js";
 
 const app = express();
@@ -67,6 +68,7 @@ app.get("/health", (_req, res) => {
 
 app.use("/auth", authRoutes);
 app.use("/public", userRoutes);
+app.use("/observations", plantObservationSubmitRoutes);
 app.use("/species", speciesRoutes);
 app.use("/observations", observationsRoutes);
 app.use("/sensors", sensorsRoutes);
