@@ -6,7 +6,7 @@ import {
   updateActiveStatus,
   assignUserRole,
   getRoles,
-} from "../controllers/admin_controller.js";
+} from "../controller/admin_controller.js";
 import {
   attachRole,
   requirePermission,

@@ -5,7 +5,7 @@ import {
   setUserActiveStatus,
   setUserRole,
   listRoles,
-} from "../services/admin_service.js";
+} from "../service/admin_service.js";
 
 // GET /api/admin/users
 export async function getAllUsers(req, res) {
