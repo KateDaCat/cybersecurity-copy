@@ -6,17 +6,19 @@ import {
   updateActiveStatus,
   assignUserRole,
   getRoles,
-} from "../controllers/admin_controller.js";
+} from "../controller/admin_controller.js";
 import {
   attachRole,
   requirePermission,
   requireAdminActive,
   PERMISSIONS,
 } from "../modules/rbac_module.js";
+import { requireMfa } from "../modules/mfa_module.js";
 
 const router = Router();
 
-// Attach role for all admin routes
+// Require session + MFA for all admin routes
+router.use(requireMfa);
 router.use(attachRole);
 
 // GET /api/admin/roles  (admin only)

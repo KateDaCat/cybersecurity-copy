@@ -4,7 +4,8 @@ import {
   verifyLoginCode,
   getMyProfile,
   signOut,
-} from "./service/auth_service.js";
+  roleKeyFromId,
+} from "../service/auth_service.js";
 
 // register
 export async function registerUser(req, res) {
@@ -23,12 +24,16 @@ export async function loginUser(req, res) {
     if (!result.ok) return res.status(401).json(result);
 
     // store partial login state (waiting for MFA)
-    req.session.mfaPendingUser = result.user; // { id, role_id }
+    req.session.mfaPendingUser = {
+      ...result.user, // { id, role_id }
+      role: result.role_key,
+    };
 
     return res.json({
       ok: true,
       mfa_required: true,
       code_sent_to: result.sent_to, // masked email
+      role: result.role_key,
     });
   } catch (e) {
     return res.status(400).json({ ok: false, message: e?.message || "Login failed" });
@@ -50,12 +55,19 @@ export async function verifyLogin(req, res) {
 
     if (!result.ok) return res.status(401).json(result);
 
+    const role = pending.role ?? (await roleKeyFromId(pending.role_id));
+
     // MFA success → user officially logged in
-    req.session.user = { id: pending.id, role_id: pending.role_id };
+    req.session.user = {
+      id: pending.id,
+      role_id: pending.role_id,
+      role,
+      is_active: pending.is_active ?? true,
+    };
     req.session.mfaVerified = true;
     delete req.session.mfaPendingUser;
 
-    return res.json({ ok: true, logged_in: true });
+    return res.json({ ok: true, logged_in: true, role });
   } catch (e) {
     return res.status(400).json({ ok: false, message: e?.message || "MFA verification failed" });
   }

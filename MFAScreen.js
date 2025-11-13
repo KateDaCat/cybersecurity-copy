@@ -10,28 +10,33 @@ import {
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import {
+  verifyMfaCode,
+  fetchCurrentProfile,
+  startPasswordLogin,
+} from "./api";
+import { ADMIN_ROOT, ROOT_TABS } from "./routes";
 
-export default function MFAVerificationScreen({ 
-  route, 
-  navigation 
+export default function MFAVerificationScreen({
+  route,
+  navigation,
 }) {
-  const { email, userId, onVerifySuccess } = route.params;
+  const { email, password, onVerifySuccess, roleHint } = route.params ?? {};
   const [mfaCode, setMfaCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [timeLeft, setTimeLeft] = useState(30);
   const [canResend, setCanResend] = useState(false);
+  const [codeSentTo, setCodeSentTo] = useState(email ? maskEmail(email) : "");
+  const [pendingRole, setPendingRole] = useState(roleHint ?? null);
 
-  // Mock MFA code for development (remove in production)
-  const [mockCode, setMockCode] = useState("");
-
-  // Generate mock code when screen loads
   useEffect(() => {
-    const newMockCode = Math.floor(100000 + Math.random() * 900000).toString();
-    setMockCode(newMockCode);
-    console.log(`🔐 MOCK MFA CODE: ${newMockCode}`);
-    
-    // Start countdown timer
+    if (!codeSentTo && email) {
+      setCodeSentTo(maskEmail(email));
+    }
+    setTimeLeft(30);
+    setCanResend(false);
+
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
@@ -43,7 +48,7 @@ export default function MFAVerificationScreen({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [email, codeSentTo]);
 
   const handleVerify = async () => {
     if (mfaCode.length !== 6) {
@@ -55,28 +60,39 @@ export default function MFAVerificationScreen({
     setError("");
 
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const verification = await verifyMfaCode(mfaCode);
+      const profile = await fetchCurrentProfile().catch(() => null);
 
-      // Mock verification - in production, this would call your backend
-      if (mfaCode === mockCode) {
-        Alert.alert("Success", "MFA verification successful!");
-        
-        // Call the success callback with user data
-        if (onVerifySuccess) {
-          onVerifySuccess();
-        } else {
-          // Fallback navigation
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'ROOT_TABS' }],
-          });
-        }
+      const resolvedRole =
+        profile?.user?.role ||
+        profile?.user?.role_name ||
+        verification?.role ||
+        pendingRole ||
+        "public";
+
+      const normalizedRole = String(resolvedRole || "").toLowerCase();
+      const destination =
+        normalizedRole === "admin" || normalizedRole === "researcher"
+          ? ADMIN_ROOT
+          : ROOT_TABS;
+
+      Alert.alert("Success", "MFA verification successful!");
+
+      if (onVerifySuccess) {
+        onVerifySuccess({
+          role: normalizedRole,
+          profile: profile?.user ?? null,
+        });
       } else {
-        throw new Error('Invalid verification code');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: destination }],
+        });
       }
+
+      setPendingRole(normalizedRole);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Verification failed");
     } finally {
       setLoading(false);
     }
@@ -85,28 +101,33 @@ export default function MFAVerificationScreen({
   const handleResendCode = async () => {
     setLoading(true);
     setError("");
-    setCanResend(false);
-    setTimeLeft(30);
-
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const newMockCode = Math.floor(100000 + Math.random() * 900000).toString();
-      setMockCode(newMockCode);
-      console.log(`🔐 MOCK MFA CODE: ${newMockCode}`);
-      
-      setError("New code sent! Check console for development mode.");
+      if (!email || !password) {
+        throw new Error("Cannot resend code without email and password.");
+      }
+
+      const response = await startPasswordLogin(email.trim().toLowerCase(), password);
+      setCodeSentTo(response.code_sent_to || response.sent_to || maskEmail(email));
+      setPendingRole(response.role || response.role_key || pendingRole);
+      setError("New code sent! Check your inbox.");
+      setCanResend(false);
+      setTimeLeft(30);
     } catch (err) {
-      setError("Failed to resend code");
+      setError(err.message || "Failed to resend code");
     } finally {
       setLoading(false);
     }
   };
 
-  const maskEmail = (email) => {
-    const [local, domain] = email.split('@');
-    const maskedLocal = local.slice(0, 2) + '*'.repeat(local.length - 2);
-    return `${maskedLocal}@${domain}`;
+  const maskEmail = (value) => {
+    if (!value || typeof value !== "string" || !value.includes("@")) {
+      return value || "";
+    }
+    const [local, domain] = value.split("@");
+    if (!domain) return value;
+    const visible = local.slice(0, 2);
+    const hiddenCount = Math.max(local.length - 2, 1);
+    return `${visible}${"*".repeat(hiddenCount)}@${domain}`;
   };
 
   return (
@@ -131,17 +152,10 @@ export default function MFAVerificationScreen({
           <Ionicons name="shield-checkmark" size={64} color="#78a756ff" />
         </View>
 
-        <Text style={styles.subtitle}>
-          We sent a verification code to
-        </Text>
-        <Text style={styles.emailText}>{maskEmail(email)}</Text>
-
-        {/* Mock Code Display - Remove in production */}
-        <View style={styles.mockContainer}>
-          <Text style={styles.mockTitle}>🛠️ DEVELOPMENT MODE</Text>
-          <Text style={styles.mockCode}>Code: {mockCode}</Text>
-          <Text style={styles.mockNote}>(In production, this would be sent via email/authenticator)</Text>
-        </View>
+      <Text style={styles.subtitle}>
+        We sent a verification code to
+      </Text>
+      <Text style={styles.emailText}>{codeSentTo || maskEmail(email)}</Text>
 
         {/* Error Message */}
         {error ? (
@@ -249,34 +263,6 @@ const styles = StyleSheet.create({
     color: "#1F2A37",
     textAlign: "center",
     marginBottom: 30,
-  },
-  mockContainer: {
-    backgroundColor: "#F3F4F6",
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 20,
-  },
-  mockTitle: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#374151",
-    textAlign: "center",
-    marginBottom: 5,
-  },
-  mockCode: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#1F2937",
-    textAlign: "center",
-    marginBottom: 5,
-  },
-  mockNote: {
-    fontSize: 12,
-    color: "#6B7280",
-    textAlign: "center",
-    fontStyle: "italic",
   },
   messageBox: {
     padding: 12,

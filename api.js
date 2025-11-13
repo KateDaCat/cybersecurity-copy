@@ -1,222 +1,106 @@
-// api.js
-// All backend API connection functions are stored here
+const API_ORIGIN = (typeof process !== "undefined" && process.env?.EXPO_PUBLIC_API_URL) || "http://192.168.88.39:3000";
+const API_BASE_URL = `${API_ORIGIN.replace(/\/$/, "")}/api`;
+const JSON_HEADERS = { Accept: "application/json", "Content-Type": "application/json" };
 
-const API_BASE_URL = "http://192.168.88.39:3000/api"; 
-// 🔧 Backend team: replace with your actual base URL later
+async function handleResponse(response) {
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    // Some endpoints might not return JSON (204, etc.)
+  }
 
-// ======================
-// LOGIN FUNCTION
-// ======================
-const MOCK_ACCOUNTS = {
-  "admin@smartplant.dev": { password: "admin123", role: "admin" },
-  "ranger@smartplant.dev": { password: "user1234", role: "user" },
-};
+  if (!response.ok) {
+    const message =
+      payload?.message ||
+      payload?.error ||
+      `Request failed with status ${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.payload = payload;
+    throw error;
+  }
 
-//mock version for testing
-export const loginUser = async (email, password) => {
-  const key = email.trim().toLowerCase();
-  console.log("Logging in:", key);
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      const account = MOCK_ACCOUNTS[key];
-      if (account && account.password === password) {
-        resolve({ success: true, role: account.role, email: key });
-      } else {
-        reject(new Error("Invalid email or password"));
-      }
-    }, 700);
+  return payload;
+}
+
+async function request(path, { method = "GET", headers = {}, body } = {}) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method,
+    headers: {
+      ...JSON_HEADERS,
+      ...headers,
+    },
+    credentials: "include",
+    body: body ? JSON.stringify(body) : undefined,
   });
-};
 
-//handle MFA
-export const verifyMFA = async (userId, code) => {
-  // This would call your actual backend
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({ success: true });
-    }, 1000);
+  return handleResponse(response);
+}
+
+export async function registerUser({ name, email, password, role }) {
+  if (!email || !password) {
+    throw new Error("Email and password are required.");
+  }
+
+  const payload = {
+    email,
+    password,
+    username: name ?? null,
+    role: role ?? "public",
+  };
+
+  return request("/auth/register", { method: "POST", body: payload });
+}
+
+export async function startPasswordLogin(email, password) {
+  return request("/auth/login", {
+    method: "POST",
+    body: { email, password },
   });
-};
+}
 
-export const resendMFACode = async (userId) => {
-  // This would call your actual backend
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({ success: true });
-    }, 1000);
+export async function verifyMfaCode(code) {
+  if (!code) {
+    throw new Error("Verification code is required.");
+  }
+  return request("/auth/verify-mfa", {
+    method: "POST",
+    body: { code },
   });
-};
+}
 
-//remove mock and use this real one
-//export const loginUser = async (email, password) => {
-  //try {
-    //const response = await fetch(`${API_BASE_URL}/login`, {
-      //method: "POST",
-      //headers: {
-        //"Content-Type": "application/json",
-      //},
-      //body: JSON.stringify({ email, password }),
-    //});
+export async function fetchCurrentProfile() {
+  return request("/auth/me");
+}
 
-    //if (!response.ok) {
-      //throw new Error("Login failed. Please check your credentials.");
-    //}
+export async function logoutUser() {
+  return request("/auth/logout", { method: "POST" });
+}
 
-    //const data = await response.json();
-    //return data; // backend should return something like { success: true, token: "..." }
-  //} catch (error) {
-    //console.error("Login API error:", error);
-    //throw error;
-  //}
-//};
+export async function forgotPassword(_email) {
+  throw new Error("Password reset is not available yet.");
+}
 
-// ======================
-// SIGN UP FUNCTION
-// ======================
-// Temporary mock backend
-//replace the fake version after come out with the real one
-export const registerUser = async (userData) => { 
-  console.log("Registering user:", userData);
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      // Simulate success if email not already “taken”
-      if (userData.email !== "taken@example.com") {
-        resolve({ success: true });
-      } else {
-        reject(new Error("Email already registered"));
-      }
-    }, 1000);
+export async function fetchSensorData() {
+  return request("/iot/latest");
+}
+
+export async function fetchAllDeviceData() {
+  return request("/devices/all");
+}
+
+export async function postChatMessage(query) {
+  return request("/chat", {
+    method: "POST",
+    body: { query },
   });
-};
+}
 
-//replace the api url after this and remove the mock version above
-//export const registerUser = async (userData) => {
-  //try {
-    //const response = await fetch(`${API_BASE_URL}/register`, {
-      //method: "POST",
-      //headers: {
-        //"Content-Type": "application/json",
-      //},
-      //body: JSON.stringify(userData),
-    //});
+export async function resolveAlertsForDevice(deviceId) {
+  return request(`/alerts/resolve/device/${deviceId}`, { method: "POST" });
+}
 
-    //if (!response.ok) {
-      //throw new Error("Failed to register. Please try again.");
-    //}
-
-    //const data = await response.json();
-    //return data;
-  //} catch (error) {
-    //console.error("Register API error:", error);
-    //throw error;
-  //}
-//};
-
-// ======================
-// FORGOT PASSWORD FUNCTION
-// ======================
-export const forgotPassword = async (email) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/forgot-password`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email }),
-    });
-
-    if (!response.ok) {
-      throw new Error("Failed to send reset link.");
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error("Forgot Password API error:", error);
-    throw error;
-  }
-};
-
-// ======================
-// IOT SENSOR FUNCTIONS
-// ======================
-
-// Fetch all sensor readings
-export const fetchSensorData = async () => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/iot/latest`);
-    if (!response.ok) throw new Error("Failed to fetch sensor data");
-    return await response.json();
-  } catch (error) {
-    console.error("Error fetching sensor data:", error);
-    throw error;
-  }
-};
-
-export const fetchAllDeviceData = async () => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/devices/all`);
-    if (!response.ok) {
-      throw new Error('Failed to fetch all device data');
-    }
-    return await response.json(); // This will be an array
-  } catch (error) {
-    console.error("Error fetching all device data:", error);
-    throw error;
-  }
-};
-
-export const postChatMessage = async (query) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query }),
-    });
-
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || 'Failed to get chat response');
-    }
-    
-    return response.json();
-  } catch (error) {
-    console.error("Error in postChatMessage:", error);
-    throw error;
-  }
-};
-
-export const resolveAlertsForDevice = async (deviceId) => {
-  try {
-    // Note: deviceId here is the raw ID (e.g., 1, 2)
-    const response = await fetch(`${API_BASE_URL}/alerts/resolve/device/${deviceId}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-    if (!response.ok) {
-      throw new Error('Failed to resolve alerts for device');
-    }
-    return await response.json();
-  } catch (error) {
-    console.error("Error resolving alerts for device:", error);
-    throw error;
-  }
-};
-
-export const fetchDeviceHistory = async (deviceId, rangeKey) => {
-  try {
-    // deviceId is the raw ID (e.g., 1), rangeKey is '1H', '24H', or '7D'
-    const response = await fetch(`${API_BASE_URL}/devices/${deviceId}/history?range=${rangeKey}`);
-    if (!response.ok) {
-      throw new Error('Failed to fetch device history');
-    }
-    return await response.json(); // This will be an array of readings
-  } catch (error) {
-    console.error("Error fetching device history:", error);
-    throw error;
-  }
-};
+export async function fetchDeviceHistory(deviceId, rangeKey) {
+  return request(`/devices/${deviceId}/history?range=${rangeKey}`);
+}
