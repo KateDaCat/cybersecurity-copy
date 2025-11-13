@@ -1,26 +1,9 @@
 import { submitObservation } from "../service/plant_observation_service.js";
 
-function extractUserId(req) {
-  return (
-    req.session?.user?.id ??
-    req.session?.user?.user_id ??
-    req.user?.id ??
-    req.body?.user_id ??
-    null
-  );
-}
-
 export async function createObservation(req, res) {
   try {
-    const userId = extractUserId(req);
-    if (!userId) {
-      return res
-        .status(401)
-        .json({ ok: false, message: "Login required to submit observation" });
-    }
-
     const payload = {
-      user_id: userId,
+      user_id: req.body?.user_id,
       species_id: req.body?.species_id,
       photo_url: req.body?.photo_url,
       location_name: req.body?.location_name,

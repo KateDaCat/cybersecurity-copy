@@ -40,9 +40,6 @@ export async function submitObservation({
   source,
 }) {
   const userId = toNumber(user_id);
-  if (!userId) {
-    throw new Error("Valid user_id is required");
-  }
 
   const speciesId = toNumber(species_id);
   if (!speciesId) {
