@@ -10,7 +10,7 @@ import {
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { registerUser } from "../../services/api"; // ✅ Backend placeholder
+import { registerUser } from "./api"; // ✅ Backend integration
 
 export default function SignUpScreen({ navigation }) {
   const [name, setName] = useState("");
@@ -47,9 +47,11 @@ export default function SignUpScreen({ navigation }) {
     setLoading(true);
     try {
       const response = await registerUser({ name, email, password });
-      if (response.success) {
+      if (response?.ok) {
         Alert.alert("Account Created", "You can now log in!");
         navigation.navigate("Login");
+      } else {
+        throw new Error(response?.message || "Failed to create account.");
       }
     } catch (error) {
       Alert.alert("Sign Up Failed", error.message || "Something went wrong.");

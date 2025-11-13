@@ -86,11 +86,21 @@ export function verifyMfa(userId, code) {
 
 // Middleware: block access if MFA not completed
 export function requireMfa(req, res, next) {
-  if (!req.user?.id && !req.user?.sub) {
+  const sessionUser = req.session?.user;
+  const hasSessionUser = Boolean(sessionUser?.id);
+  const hasRequestUser = Boolean(req.user?.id || req.user?.sub);
+
+  if (!hasSessionUser && !hasRequestUser) {
     return res.status(401).json({ message: "Login required" });
   }
+
   if (!req.session?.mfaVerified) {
     return res.status(401).json({ message: "MFA required" });
   }
+
+  if (hasSessionUser && !req.user) {
+    req.user = { ...sessionUser };
+  }
+
   next();
 }

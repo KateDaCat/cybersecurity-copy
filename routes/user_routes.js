@@ -5,9 +5,11 @@ import {
   getPublicObservations,
   getPublicObservation,
 } from "../controller/user_controller.js";
-import { requireTableView } from "../modules/rbac_module.js";
+import { attachRole, requireTableView } from "../modules/rbac_module.js";
 
 const router = Router();
+
+router.use(attachRole);
 
 router.get(
   "/species",

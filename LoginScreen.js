@@ -10,8 +10,13 @@ import {
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { loginUser, forgotPassword } from "../../services/api";
-import { ADMIN_ROOT, ROOT_TABS } from '../navigation/routes';
+import {
+  startPasswordLogin,
+  verifyMfaCode,
+  fetchCurrentProfile,
+  forgotPassword,
+} from "./api";
+import { ADMIN_ROOT, ROOT_TABS } from "./routes";
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
@@ -23,13 +28,8 @@ export default function LoginScreen({ navigation }) {
   // MFA state variables
   const [step, setStep] = useState(1); // 1: credentials, 2: MFA verification
   const [mfaCode, setMfaCode] = useState("");
-  const [mockCode, setMockCode] = useState("");
-  const [userEmail, setUserEmail] = useState("");
-
-  // Generate mock MFA code
-  const generateMockCode = () => {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-  };
+  const [codeSentTo, setCodeSentTo] = useState("");
+  const [pendingRole, setPendingRole] = useState(null);
 
   // Handle credentials submission - FIXED VERSION
   const handleCredentialsSubmit = async () => {
@@ -40,25 +40,11 @@ export default function LoginScreen({ navigation }) {
 
     setLoading(true);
     try {
-      // First validate credentials with the API
-      const credentialsResponse = await loginUser(email, password);
-      
-      // Check if credentials are valid
-      if (credentialsResponse.success) {
-        // If credentials are valid, generate and send MFA code
-        const code = generateMockCode();
-        setMockCode(code);
-        setUserEmail(email);
-        
-        // Simulate sending code to email
-        console.log(`MOCK EMAIL: Your verification code is ${code}`);
-        
-        // Move to MFA step ONLY if credentials are valid
-        setStep(2);
-      } else {
-        // If credentials are invalid, show error and stay on step 1
-        throw new Error(credentialsResponse.message || 'Invalid email or password');
-      }
+      const response = await startPasswordLogin(email.trim().toLowerCase(), password);
+      setCodeSentTo(response.code_sent_to || response.sent_to || maskEmail(email));
+      setPendingRole(response.role || response.role_key || null);
+      setMfaCode("");
+      setStep(2);
     } catch (err) {
       Alert.alert("Login Failed", err.message || "Invalid email or password");
     } finally {
@@ -75,36 +61,36 @@ export default function LoginScreen({ navigation }) {
 
     setLoading(true);
     try {
-      // Verify MFA code
-      if (mfaCode === mockCode) {
-        // MFA successful - complete the login process
-        const finalResponse = await loginUser(email, password);
-        
-        if (finalResponse.success) {
-          const destinations = {
-            admin: ADMIN_ROOT,
-            user: ROOT_TABS,
-          };
-          const destination = destinations[finalResponse.role] ?? ROOT_TABS;
-          Alert.alert(
-            "Login Successful",
-            `Signed in as ${finalResponse.role === 'admin' ? 'administrator' : 'user'}.`
-          );
-          
-          if (rememberMe) {
-            console.log("User wants to be remembered:", email);
-          }
-          
-          navigation.reset({
-            index: 0,
-            routes: [{ name: destination }],
-          });
-        } else {
-          throw new Error('Login failed after MFA verification');
-        }
-      } else {
-        throw new Error('Invalid verification code');
+      const verification = await verifyMfaCode(mfaCode);
+      const profile = await fetchCurrentProfile().catch(() => null);
+
+      const resolvedRole =
+        profile?.user?.role ||
+        profile?.user?.role_name ||
+        verification?.role ||
+        pendingRole ||
+        "public";
+
+      const normalizedRole = String(resolvedRole || "").toLowerCase();
+      const friendlyRole =
+        normalizedRole === "public" || normalizedRole === "user"
+          ? "user"
+          : normalizedRole;
+      const destination =
+        normalizedRole === "admin" || normalizedRole === "researcher"
+          ? ADMIN_ROOT
+          : ROOT_TABS;
+
+      if (rememberMe) {
+        console.log("User wants to be remembered:", email);
       }
+
+      Alert.alert("Login Successful", `Signed in as ${friendlyRole}.`);
+
+      navigation.reset({
+        index: 0,
+        routes: [{ name: destination }],
+      });
     } catch (err) {
       Alert.alert("Verification Failed", err.message);
     } finally {
@@ -114,31 +100,42 @@ export default function LoginScreen({ navigation }) {
 
   // Handle resend code
   const handleResendCode = async () => {
+    if (!email || !password) {
+      Alert.alert("Missing Fields", "Enter your credentials again to request a new code.");
+      return;
+    }
+
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      const newCode = generateMockCode();
-      setMockCode(newCode);
-      console.log(`MOCK EMAIL: Your new verification code is ${newCode}`);
-      Alert.alert("Code Sent", "New verification code sent! Check console for development mode.");
+      const response = await startPasswordLogin(email.trim().toLowerCase(), password);
+      setCodeSentTo(response.code_sent_to || response.sent_to || maskEmail(email));
+      setPendingRole(response.role || response.role_key || pendingRole);
+      Alert.alert("Code Sent", "A new verification code has been sent.");
     } catch (err) {
-      Alert.alert("Error", "Failed to resend code");
+      Alert.alert("Error", err.message || "Failed to resend code");
     } finally {
       setLoading(false);
     }
   };
 
   // Mask email function
-  const maskEmail = (email) => {
-    const [local, domain] = email.split('@');
-    const maskedLocal = local.slice(0, 2) + '*'.repeat(local.length - 2);
-    return `${maskedLocal}@${domain}`;
+  const maskEmail = (value) => {
+    if (!value || typeof value !== "string" || !value.includes("@")) {
+      return value || "";
+    }
+    const [local, domain] = value.split("@");
+    if (!domain) return value;
+    const visible = local.slice(0, 2);
+    const hiddenCount = Math.max(local.length - 2, 1);
+    return `${visible}${"*".repeat(hiddenCount)}@${domain}`;
   };
 
   // Back to credentials step
   const handleBackToLogin = () => {
     setStep(1);
     setMfaCode("");
+    setPendingRole(null);
+    setCodeSentTo("");
   };
 
   // Your original forgot password function
@@ -154,7 +151,7 @@ export default function LoginScreen({ navigation }) {
       Alert.alert("Check Your Inbox", "Password reset link sent!");
       console.log("Password reset requested for:", email);
     } catch (error) {
-      Alert.alert("Error", "Unable to process request.");
+      Alert.alert("Error", error.message || "Unable to process request.");
     } finally {
       setLoading(false);
     }
@@ -270,22 +267,15 @@ export default function LoginScreen({ navigation }) {
                 <Ionicons name="mail" size={40} color="#fff" />
               </View>
               <Text style={styles.mfaTitle}>Email Verification</Text>
-              <Text style={styles.mfaSubtitle}>
-                We sent a 6-digit code to{"\n"}
-                <Text style={styles.emailHighlight}>{maskEmail(userEmail)}</Text>
-              </Text>
-              <Text style={styles.mfaHint}>
-                Check your email and enter the code below
-              </Text>
-              
-              {/* Mock code display */}
-              <View style={styles.mockCodeDisplay}>
-                <Text style={styles.mockTitle}>DEVELOPMENT MODE</Text>
-                <Text style={styles.mockCodeText}>
-                  Your verification code is: <Text style={styles.codeHighlight}>{mockCode}</Text>
+                <Text style={styles.mfaSubtitle}>
+                  We sent a 6-digit code to{"\n"}
+                  <Text style={styles.emailHighlight}>
+                    {codeSentTo || maskEmail(email)}
+                  </Text>
                 </Text>
-                <Text style={styles.mockNote}>(In production, this would be sent to your email)</Text>
-              </View>
+                <Text style={styles.mfaHint}>
+                  Check your email and enter the code below.
+                </Text>
             </View>
 
             {/* MFA Code Input */}
@@ -502,40 +492,6 @@ const styles = StyleSheet.create({
     color: "#bbb",
     textAlign: "center",
     marginBottom: 20,
-  },
-  mockCodeDisplay: {
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-    padding: 15,
-    borderRadius: 10,
-    marginTop: 10,
-    width: "100%",
-  },
-  mockTitle: {
-    color: "#fff",
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 5,
-    fontSize: 14,
-  },
-  mockCodeText: {
-    color: "#ddd",
-    textAlign: "center",
-    fontSize: 13,
-    marginBottom: 5,
-  },
-  codeHighlight: {
-    backgroundColor: "#1F2937",
-    color: "#FFFFFF",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    fontWeight: "bold",
-  },
-  mockNote: {
-    fontSize: 11,
-    color: "#999",
-    textAlign: "center",
-    fontStyle: "italic",
   },
   mfaButtonGroup: {
     flexDirection: "row",

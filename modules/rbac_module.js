@@ -61,11 +61,12 @@ function normalizeRole(value) {
 
 // Attach role to the request (prefer auth-populated role)
 export function attachRole(req, _res, next) {
-  const fromAuth   = req.user?.role || req.user?.role_name;
+  const fromAuth = req.user?.role || req.user?.role_name;
   const fromHeader = req.headers["x-user-role"];
-  const fromQuery  = req.query?.role;
-  const fromBody   = req.body?.role;
-  req.role = normalizeRole(fromAuth || fromHeader || fromQuery || fromBody);
+  const fromQuery = req.query?.role;
+  const fromBody = req.body?.role;
+  const fromSession = req.session?.user?.role;
+  req.role = normalizeRole(fromAuth || fromHeader || fromQuery || fromBody || fromSession);
   next();
 }
 
