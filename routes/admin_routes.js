@@ -1,38 +1,60 @@
+// routes/admin_routes.js
 import { Router } from "express";
 import {
   getAllUsers,
-  assignUserRole,
   viewUser,
-  updateActiveStatus
-} from "../controller/admin_controller.js";
-import { requirePermission, PERMISSIONS } from "../modules/rbac_module.js";
+  updateActiveStatus,
+  assignUserRole,
+  getRoles,
+} from "../controllers/admin_controller.js";
+import {
+  attachRole,
+  requirePermission,
+  requireAdminActive,
+  PERMISSIONS,
+} from "../modules/rbac_module.js";
 
 const router = Router();
 
-// List
+// Attach role for all admin routes
+router.use(attachRole);
+
+// GET /api/admin/roles  (admin only)
+router.get(
+  "/roles",
+  requireAdminActive,
+  requirePermission(PERMISSIONS.VIEW_ROLES),
+  getRoles
+);
+
+// GET /api/admin/users  (admin only)
 router.get(
   "/users",
+  requireAdminActive,
   requirePermission(PERMISSIONS.VIEW_USERS),
   getAllUsers
 );
 
-// View single user
+// GET /api/admin/users/:id  (admin only)
 router.get(
   "/users/:id",
+  requireAdminActive,
   requirePermission(PERMISSIONS.VIEW_USERS),
   viewUser
 );
 
-// Toggle active (use same admin-only permission as role changes)
+// PATCH /api/admin/users/:id/active  (admin only, account activation)
 router.patch(
   "/users/:id/active",
-  requirePermission(PERMISSIONS.ASSIGN_ROLES),
+  requireAdminActive,
+  requirePermission(PERMISSIONS.ACCOUNT_ACTIVATION),
   updateActiveStatus
 );
 
-// Assign role
+// PATCH /api/admin/users/:id/role  (admin only, assign roles)
 router.patch(
   "/users/:id/role",
+  requireAdminActive,
   requirePermission(PERMISSIONS.ASSIGN_ROLES),
   assignUserRole
 );
